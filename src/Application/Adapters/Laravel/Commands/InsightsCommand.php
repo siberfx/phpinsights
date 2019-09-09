@@ -6,6 +6,7 @@ namespace NunoMaduro\PhpInsights\Application\Adapters\Laravel\Commands;
 
 use Illuminate\Console\Command;
 use NunoMaduro\PhpInsights\Application\Console\Commands\AnalyseCommand;
+use NunoMaduro\PhpInsights\Application\Console\Definitions\AnalyseDefinition;
 use NunoMaduro\PhpInsights\Domain\Kernel;
 use NunoMaduro\PhpInsights\Domain\Reflection;
 
@@ -14,19 +15,10 @@ use NunoMaduro\PhpInsights\Domain\Reflection;
  */
 final class InsightsCommand extends Command
 {
-    /**
-     * {@inheritdoc}
-     */
-    protected $signature = 'insights {directory?} {--config-path=config/insights.php}';
+    protected $name = 'insights';
 
-    /**
-     * {@inheritdoc}
-     */
     protected $description = 'Analyze the code quality';
 
-    /**
-     * {@inheritdoc}
-     */
     public function handle(AnalyseCommand $analyseCommand): int
     {
         Kernel::bootstrap();
@@ -40,8 +32,19 @@ final class InsightsCommand extends Command
 
         $output = (new Reflection($this->output))->get('output');
 
-        $analyseCommand->__invoke($this->input, $output);
+        return $analyseCommand->__invoke($this->input, $output);
+    }
 
-        return 0;
+    public function configure(): void
+    {
+        parent::configure();
+
+        $this->setDefinition(
+            AnalyseDefinition::get()
+        );
+
+        $this->getDefinition()
+            ->getOption('config-path')
+            ->setDefault('config/insights.php');
     }
 }

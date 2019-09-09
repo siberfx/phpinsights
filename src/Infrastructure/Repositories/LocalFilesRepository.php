@@ -6,6 +6,7 @@ namespace NunoMaduro\PhpInsights\Infrastructure\Repositories;
 
 use NunoMaduro\PhpInsights\Domain\Contracts\Repositories\FilesRepository;
 use Symfony\Component\Finder\Finder;
+use Traversable;
 
 /**
  * @internal
@@ -20,14 +21,15 @@ final class LocalFilesRepository implements FilesRepository
     /**
      * LocalFilesRepository constructor.
      *
-     * @param  \Symfony\Component\Finder\Finder  $finder
+     * @param \Symfony\Component\Finder\Finder  $finder
      */
     public function __construct(Finder $finder)
     {
         $this->finder = $finder
             ->files()
-            ->name(['*.php'])
-            ->exclude(['vendor', 'tests', 'Tests', 'test', 'Test'])
+            ->name(['*.php',])
+            ->exclude(['vendor', 'tests', 'Tests', 'test', 'Test',])
+            ->notName(['*.blade.php',])
             // ->ignoreVCSIgnored(true)
             ->ignoreUnreadableDirs();
     }
@@ -43,7 +45,7 @@ final class LocalFilesRepository implements FilesRepository
     /**
      * {@inheritdoc}
      */
-    public function getFiles(): iterable
+    public function getFiles(): Traversable
     {
         return $this->finder->getIterator();
     }
@@ -51,9 +53,14 @@ final class LocalFilesRepository implements FilesRepository
     /**
      * {@inheritdoc}
      */
-    public function within(string $directory, array $exclude): FilesRepository
+    public function within(string $path, array $exclude = []): FilesRepository
     {
-        $this->finder->in([$directory])->exclude($exclude);
+        if (! is_dir($path) && is_file($path)) {
+            $this->finder->append([$path]);
+
+            return $this;
+        }
+        $this->finder->in([$path])->notPath($exclude);
 
         foreach ($exclude as $value) {
             if (substr($value, -4) === '.php') {
@@ -62,13 +69,5 @@ final class LocalFilesRepository implements FilesRepository
         }
 
         return $this;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function find(array $source)
-    {
-        return $this->getFiles();
     }
 }

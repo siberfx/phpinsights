@@ -5,16 +5,15 @@ declare(strict_types=1);
 namespace NunoMaduro\PhpInsights\Domain\Insights;
 
 use NunoMaduro\PhpInsights\Domain\Contracts\HasDetails;
+use NunoMaduro\PhpInsights\Domain\Details;
 
 final class CyclomaticComplexityIsHigh extends Insight implements HasDetails
 {
-    /**
-     * {@inheritdoc}
-     */
     public function hasIssue(): bool
     {
+        $maxComplexity = $this->getMaxComplexity();
         foreach ($this->collector->getClassComplexity() as $complexity) {
-            if ($complexity > 5) {
+            if ($complexity > $maxComplexity) {
                 return true;
             }
         }
@@ -22,12 +21,12 @@ final class CyclomaticComplexityIsHigh extends Insight implements HasDetails
         return false;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function getTitle(): string
     {
-        return sprintf('Having `classes` with more than 5 cyclomatic complexity is prohibited - Consider refactoring');
+        return sprintf(
+            'Having `classes` with more than %s cyclomatic complexity is prohibited - Consider refactoring',
+            $this->getMaxComplexity()
+        );
     }
 
     /**
@@ -35,18 +34,29 @@ final class CyclomaticComplexityIsHigh extends Insight implements HasDetails
      */
     public function getDetails(): array
     {
-        $classesComplexity = array_filter($this->collector->getClassComplexity(), static function ($complexity) {
-            return $complexity > 5;
-        });
+        $complexityLimit = $this->getMaxComplexity();
+        $classesComplexity = array_filter(
+            $this->collector->getClassComplexity(),
+            static function ($complexity) use ($complexityLimit) {
+                return $complexity > $complexityLimit;
+            }
+        );
 
-        uasort($classesComplexity, static function ($a, $b) {
-            return $b - $a;
+        uasort($classesComplexity, static function ($left, $right) {
+            return $right - $left;
         });
 
         $classesComplexity = array_reverse($classesComplexity);
 
-        return array_map(static function ($class, $complexity) {
-            return "$class: $complexity cyclomatic complexity";
+        return array_map(static function ($class, $complexity): Details {
+            return Details::make()
+                ->setFile($class)
+                ->setMessage("$complexity cyclomatic complexity");
         }, array_keys($classesComplexity), $classesComplexity);
+    }
+
+    private function getMaxComplexity(): int
+    {
+        return (int) ($this->config['maxComplexity'] ?? 5);
     }
 }

@@ -20,7 +20,7 @@ final class InvokableCommand extends BaseCommand
      *
      * @param  string  $name
      * @param  callable  $callable
-     * @param  array<\Symfony\Component\Console\Input\InputArgument|\Symfony\Component\Console\Input\InputOption>  $definition
+     * @param  array<int, \Symfony\Component\Console\Input\InputArgument|\Symfony\Component\Console\Input\InputOption>  $definition
      */
     public function __construct(string $name, callable $callable, array $definition)
     {
@@ -31,13 +31,8 @@ final class InvokableCommand extends BaseCommand
         $this->callable = $callable;
     }
 
-    /**
-     * {@inheritdoc}
-     */
     public function execute(InputInterface $input, OutputInterface $output): int
     {
-        call_user_func($this->callable, $input, $output);
-
-        return 0;
+        return call_user_func($this->callable, $input, $output);
     }
 }

@@ -13,9 +13,6 @@ use NunoMaduro\PhpInsights\Application\Injectors\Repositories;
  */
 final class InsightsServiceProvider extends ServiceProvider
 {
-    /**
-     * {@inheritDoc}
-     */
     public function register(): void
     {
         foreach ($this->app->make(Repositories::class)->__invoke() as $abstract => $concrete) {
@@ -23,14 +20,13 @@ final class InsightsServiceProvider extends ServiceProvider
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public function boot(): void
     {
-        $this->publishes([
-            __DIR__ . '/../../../../stubs/laravel.php' => $this->app->configPath('insights.php'),
-        ], 'config');
+        if ($this->app instanceof \Illuminate\Contracts\Foundation\Application) {
+            $this->publishes([
+                __DIR__.'/../../../../stubs/laravel.php' => $this->app->configPath('insights.php'),
+            ], 'config');
+        }
 
         $this->commands([
             InsightsCommand::class,

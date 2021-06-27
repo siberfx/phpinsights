@@ -4,103 +4,282 @@ declare(strict_types=1);
 
 namespace NunoMaduro\PhpInsights\Domain;
 
+use NunoMaduro\PhpInsights\Application\Console\Commands\InternalProcessorCommand;
+use NunoMaduro\PhpInsights\Domain\Contracts\DetailsCarrier;
+use NunoMaduro\PhpInsights\Domain\Contracts\Fixable;
+use NunoMaduro\PhpInsights\Domain\Contracts\GlobalInsight;
 use NunoMaduro\PhpInsights\Domain\Contracts\Repositories\FilesRepository;
-use NunoMaduro\PhpInsights\Domain\FileProcessors\SniffFileProcessor;
-use NunoMaduro\PhpInsights\Domain\Insights\SniffDecorator;
-use SplFileInfo;
+use Psr\SimpleCache\CacheInterface;
 use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Finder\SplFileInfo as SymfonySplFileInfo;
+use Symfony\Component\Finder\SplFileInfo;
+use Symfony\Component\Process\Process;
 
 /**
  * @internal
  */
 final class Runner
 {
-    /** @var \NunoMaduro\PhpInsights\Domain\FileProcessors\SniffFileProcessor */
-    private $phpCsFileProcessor;
+    private const EMPTY_BAR_CHARACTER = '░';
 
-    /** @var \Symfony\Component\Console\Output\OutputInterface */
-    private $output;
+    // light shade character \u2591
+    private const PROGRESS_CHARACTER = '';
 
-    /** @var \NunoMaduro\PhpInsights\Domain\Contracts\Repositories\FilesRepository */
-    private $filesRepository;
+    private const BAR_CHARACTER = '▓';
 
-    /**
-     * InsightContainer constructor.
-     *
-     * @param \Symfony\Component\Console\Output\OutputInterface $output
-     * @param \NunoMaduro\PhpInsights\Domain\Contracts\Repositories\FilesRepository $filesRepository
-     */
-    public function __construct(
-        OutputInterface $output,
-        FilesRepository $filesRepository
-    )
+    private OutputInterface $output;
+
+    private FilesRepository $filesRepository;
+
+    private CacheInterface $cache;
+
+    private string $cacheKey;
+
+    private int $threads;
+
+    /** @var array<\NunoMaduro\PhpInsights\Domain\Contracts\GlobalInsight|\NunoMaduro\PhpInsights\Domain\Contracts\Insight> */
+    private array $globalInsights = [];
+
+    /** @var array<\NunoMaduro\PhpInsights\Domain\Contracts\Insight> */
+    private array $allInsights = [];
+
+    private Configuration $configuration;
+
+    public function __construct(OutputInterface $output, FilesRepository $filesRepository)
     {
         $this->filesRepository = $filesRepository;
         $this->output = $output;
 
         $container = Container::make();
 
-        $this->phpCsFileProcessor = $container->get(SniffFileProcessor::class);
+        $this->cache = $container->get(CacheInterface::class);
+
+        $this->configuration = $container->get(Configuration::class);
+        $this->cacheKey = $this->configuration->getCacheKey();
+        $this->threads = $this->configuration->getNumberOfThreads();
     }
 
     /**
-     * @param array<SniffDecorator> $sniffs
+     * @param array<\NunoMaduro\PhpInsights\Domain\Contracts\Insight> $insights
      */
-    public function addSniffs(array $sniffs): void
+    public function addInsights(array $insights): void
     {
-        foreach ($sniffs as $sniff) {
-            $this->phpCsFileProcessor->addSniff($sniff);
+        $this->allInsights = array_merge($insights, $this->allInsights);
+        foreach ($insights as $insight) {
+            if ($insight instanceof GlobalInsight) {
+                $this->globalInsights[] = $insight;
+                continue;
+            }
         }
     }
-
 
     public function run(): void
     {
         // Get the files.
         $files = $this->filesRepository->getFiles();
-        $files = iterator_to_array($files);
+        $initialCountOfFiles = \count($files);
 
         // No files found
-        if (count($files) === 0) {
+        if ($initialCountOfFiles === 0) {
+            // no file to inspect, no progress bar, early return.
             return;
         }
 
+        if (! $this->configuration->hasFixEnabled()) {
+            // retrieve all files already cached
+            $filesCached = array_filter(
+                $files,
+                fn (SplFileInfo $file): bool => $this->cache->has(
+                    'insights.' . $this->cacheKey . '.' . md5($file->getContents())
+                )
+            );
+
+            // process them
+            array_walk(
+                $filesCached,
+                function (SplFileInfo $file): void {
+                    $this->processFile($file);
+                }
+            );
+
+            // and reduce files to launch inspection
+            $files = array_diff($files, $filesCached);
+        }
+
+        $totalFiles = \count($files);
+
+        // Save in cache the current configuration
+        $this->cache->set('current_configuration', $this->configuration);
+
+        $sizeChunk = (int) ceil($totalFiles / $this->threads);
+        // Create batch for files
+        $filesByThread = [];
+        if ($sizeChunk > 0) {
+            $filesByThread = array_chunk(
+                array_map(static fn (SplFileInfo $file) => $file->getRealPath(), $files),
+                $sizeChunk,
+                false
+            );
+        }
+
         // Create progress bar
-        $progressBar = new ProgressBar($this->output, count($files));
+        $this->output->writeln('');
+        $progressBar = $this->createProgressBar($initialCountOfFiles + \count($this->globalInsights));
+        $progressBar->setMessage('');
         $progressBar->start();
 
-        foreach ($files as $file) {
-            // Output file name if verbose
-            if ($this->output->isVerbose()) {
-                $this->output->writeln(" {$file->getRealPath()}");
-            }
+        if ($initialCountOfFiles !== $totalFiles) {
+            $progressBar->advance($initialCountOfFiles - $totalFiles);
+            $progressBar->display();
+        }
 
-            $this->processFile($file);
+        $binary = $this->retrieveBinaryPath();
+        /** @var array<Process> $runningProcesses */
+        $runningProcesses = [];
+        for ($i = 0; $i < $this->threads; $i++) {
+            if (! \array_key_exists($i, $filesByThread)) {
+                // Not enough file to inspects to occupate every threads. Bypass
+                continue;
+            }
+            $cacheKey = sprintf('thread-%s-%s', $i, md5(implode('', $filesByThread[$i])));
+            $this->cache->set($cacheKey, $filesByThread[$i]);
+
+            $process = new Process([PHP_BINARY, $binary, InternalProcessorCommand::NAME, $cacheKey]);
+            $process->start();
+            $runningProcesses[] = $process;
+        }
+
+        while (\count($runningProcesses) > 0) {
+            foreach ($runningProcesses as $i => $runningProcess) {
+                if (! $runningProcess->isRunning()) {
+                    $progressBar->advance(\count($filesByThread[$i]));
+                    unset($runningProcesses[$i]);
+                }
+                usleep(1000);
+            }
+        }
+
+        /** @var GlobalInsight $insight */
+        foreach ($this->globalInsights as $insight) {
+            $insight->process();
             $progressBar->advance();
         }
+
+        /** @var SplFileInfo $file */
+        foreach ($files as $file) {
+            $this->processFile($file);
+        }
+
+        $progressBar->setMessage(PHP_EOL . '<info> ✨ Analysis Completed !</info>');
+
+        $this->cache->delete('current_configuration');
+        $progressBar->finish();
     }
 
     private function processFile(SplFileInfo $file): void
     {
-        if (! ($file instanceof SymfonySplFileInfo)) {
-            $path = $file->getPath()
-                . DIRECTORY_SEPARATOR
-                . $file->getFilename();
+        $cacheKey = 'insights.' . $this->cacheKey . '.' . md5($file->getContents());
+        // Do not use cache if fix is enabled to force processors to handle it
+        if (! $this->cache->has($cacheKey)) {
+            throw new \LogicException('Unable to find data for ' . $file->getPathname());
+        }
 
-            $file = new SymfonySplFileInfo(
-                $path,
-                $file->getPath(),
-                $path
+        $this->loadDetailsCache($cacheKey);
+
+        if ($this->configuration->hasFixEnabled()) {
+            $cacheKey = str_replace('insights.', 'fix.', $cacheKey);
+            $this->loadFixCache($cacheKey);
+        }
+    }
+
+    private function loadDetailsCache(string $cacheKey): void
+    {
+        $detailsByInsights = $this->cache->get($cacheKey);
+        /** @var \NunoMaduro\PhpInsights\Domain\Contracts\Insight $insight */
+        foreach ($this->allInsights as $insight) {
+            if (! $insight instanceof DetailsCarrier) {
+                continue;
+            }
+            if (! isset($detailsByInsights[$insight->getInsightClass()])) {
+                continue;
+            }
+            array_walk(
+                $detailsByInsights[$insight->getInsightClass()],
+                static function (Details $details) use ($insight): void {
+                    $insight->addDetails($details);
+                }
+            );
+        }
+    }
+
+    private function loadFixCache(string $cacheKey): void
+    {
+        $fixByInsights = $this->cache->get($cacheKey);
+        /** @var \NunoMaduro\PhpInsights\Domain\Contracts\Insight $insight */
+        foreach ($this->allInsights as $insight) {
+            if (! $insight instanceof Fixable) {
+                continue;
+            }
+            if (! isset($fixByInsights[$insight->getInsightClass()])) {
+                continue;
+            }
+            array_walk(
+                $fixByInsights[$insight->getInsightClass()],
+                static function (Details $details) use ($insight): void {
+                    $insight->addFileFixed($details->getFile());
+                }
             );
         }
 
-        /** @var \NunoMaduro\PhpInsights\Domain\Contracts\FileProcessor $fileProcessor */
-        foreach ([
-            $this->phpCsFileProcessor,
-        ] as $fileProcessor) {
-            $fileProcessor->processFile($file);
+        $this->cache->delete($cacheKey);
+    }
+
+    private function createProgressBar(int $max = 0): ProgressBar
+    {
+        $progressBar = new ProgressBar($this->output, $max); // dark shade character \u2593
+
+        $format = ProgressBar::getFormatDefinition($this->getProgressFormat());
+        $format .= PHP_EOL . '%message%';
+
+        ProgressBar::setFormatDefinition('phpinsight', $format);
+        $progressBar->setFormat('phpinsight');
+
+        if (\DIRECTORY_SEPARATOR !== '\\' || getenv('TERM_PROGRAM') === 'Hyper') {
+            $progressBar->setEmptyBarCharacter(self::EMPTY_BAR_CHARACTER);
+            $progressBar->setProgressCharacter(self::PROGRESS_CHARACTER);
+            $progressBar->setBarCharacter(self::BAR_CHARACTER);
         }
+
+        return $progressBar;
+    }
+
+    private function getProgressFormat(): string
+    {
+        $verbosity = $this->output->getVerbosity();
+
+        if ($verbosity === OutputInterface::VERBOSITY_VERBOSE) {
+            return 'verbose';
+        }
+
+        if ($verbosity === OutputInterface::VERBOSITY_VERY_VERBOSE) {
+            return 'very_verbose';
+        }
+
+        if ($verbosity === OutputInterface::VERBOSITY_DEBUG) {
+            return 'debug';
+        }
+
+        return 'normal';
+    }
+
+    private function retrieveBinaryPath(): string
+    {
+        $binary = realpath($_SERVER['argv'][0]);
+        if ($binary === false ||
+            mb_strpos(pathinfo($binary, PATHINFO_FILENAME), 'phpinsights') === false) {
+            $binary = getcwd() . '/vendor/bin/phpinsights';
+        }
+
+        return $binary;
     }
 }

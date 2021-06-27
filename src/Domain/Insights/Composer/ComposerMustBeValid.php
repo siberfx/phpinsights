@@ -4,34 +4,34 @@ declare(strict_types=1);
 
 namespace NunoMaduro\PhpInsights\Domain\Insights\Composer;
 
+use Composer\Composer;
 use Composer\IO\NullIO;
+use Composer\Package\Loader\ValidatingArrayLoader;
 use Composer\Util\ConfigValidator;
 use NunoMaduro\PhpInsights\Domain\ComposerFinder;
 use NunoMaduro\PhpInsights\Domain\Contracts\HasDetails;
 use NunoMaduro\PhpInsights\Domain\Details;
 use NunoMaduro\PhpInsights\Domain\Insights\Insight;
 
+/**
+ * @see \Tests\Domain\Insights\Composer\ComposerMustBeValidTest
+ */
 final class ComposerMustBeValid extends Insight implements HasDetails
 {
+    private bool $analyzed = false;
+
     /**
-     * @var array<string>
+     * @var array<Details>
      */
-    private $errors;
-    /**
-     * @var array<string>
-     */
-    private $publishErrors;
-    /**
-     * @var array<string>
-     */
-    private $warnings;
+    private array $details = [];
 
     public function hasIssue(): bool
     {
-        $validator = new ConfigValidator(new NullIO());
-        [$this->errors, $this->publishErrors, $this->warnings] = $validator->validate(ComposerFinder::getPath($this->collector));
+        if (! $this->analyzed) {
+            $this->process();
+        }
 
-        return \count(\array_merge($this->errors, $this->publishErrors, $this->warnings)) > 0;
+        return count($this->details) > 0;
     }
 
     public function getTitle(): string
@@ -41,17 +41,32 @@ final class ComposerMustBeValid extends Insight implements HasDetails
 
     public function getDetails(): array
     {
-        $details = [];
+        return $this->details;
+    }
 
-        foreach (array_merge($this->errors, $this->publishErrors, $this->warnings) as $issue) {
+    private function process(): void
+    {
+        $validator = new ConfigValidator(new NullIO());
+
+        if ($this->isComposerV2()) {
+            [$errors, $publishErrors, $warnings] = $validator->validate(ComposerFinder::getPath($this->collector), ValidatingArrayLoader::CHECK_ALL, (int) ($this->config['composerVersionCheck'] ?? ConfigValidator::CHECK_VERSION));
+        } else {
+            [$errors, $publishErrors, $warnings] = $validator->validate(ComposerFinder::getPath($this->collector), ValidatingArrayLoader::CHECK_ALL);
+        }
+
+        foreach (array_merge($errors, $publishErrors, $warnings) as $issue) {
             if (strpos($issue, ' : ') !== false) {
                 $issue = explode(' : ', $issue)[1];
             }
-            $details[] = Details::make()
-                ->setFile('composer.json')
-                ->setMessage($issue);
+
+            $this->details[] = Details::make()->setFile('composer.json')->setMessage($issue);
         }
 
-        return $details;
+        $this->analyzed = true;
+    }
+
+    private function isComposerV2(): bool
+    {
+        return strpos(Composer::VERSION, '2') === 0;
     }
 }

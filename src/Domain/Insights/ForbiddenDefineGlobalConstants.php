@@ -11,17 +11,13 @@ final class ForbiddenDefineGlobalConstants extends Insight implements HasDetails
 {
     public function hasIssue(): bool
     {
-        /** @var array<string> $ignore */
-        $ignore = $this->config['ignore'] ?? [];
-
-        return count(array_diff($this->collector->getGlobalConstants(), $ignore)) > 0;
+        return count($this->getDetails()) > 0;
     }
 
     public function getTitle(): string
     {
         return 'Define `globals` is prohibited';
     }
-
 
     /**
      * {@inheritdoc}
@@ -32,11 +28,10 @@ final class ForbiddenDefineGlobalConstants extends Insight implements HasDetails
         $ignore = $this->config['ignore'] ?? [];
 
         $globalConstants = array_diff($this->collector->getGlobalConstants(), $ignore);
+        $globalConstants = $this->filterFilesWithoutExcluded($globalConstants);
 
-        return array_map(static function ($file, $constant): Details {
-            return Details::make()
-                ->setFile($file)
-                ->setMessage($constant);
-        }, array_keys($globalConstants), $globalConstants);
+        return array_map(static fn ($file, $constant): Details => Details::make()
+            ->setFile($file)
+            ->setMessage($constant), array_keys($globalConstants), $globalConstants);
     }
 }

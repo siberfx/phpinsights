@@ -12,33 +12,31 @@ final class SniffDecoratorTest extends TestCase
 {
     public function testCanIgnoreFileInSniffWithFullPath(): void
     {
-       $collection = $this->runAnalyserOnConfig(
-           [
+        $collection = $this->runAnalyserOnConfig(
+            [
                'config' => [
                    OneClassPerFileSniff::class => [
                        'exclude' => [
-                           __DIR__ . '/../../Fixtures/Domain/Sniffs/SniffWrapper/FileWithTwoClasses.php'
-                       ]
-                   ]
-               ]
-           ],
-           [
-               __DIR__ . '/../../Fixtures/Domain/Sniffs/SniffWrapper/FileWithTwoClasses.php'
-           ]
-       );
-       $oneClassPerFileSniffErrors = 0;
+                           __DIR__ . '/../../Fixtures/Domain/Sniffs/SniffWrapper/FileWithTwoClasses.php',
+                       ],
+                   ],
+               ],
+            ],
+            [
+               __DIR__ . '/../../Fixtures/Domain/Sniffs/SniffWrapper/FileWithTwoClasses.php',
+            ]
+        );
 
-       foreach ($collection->allFrom(new Classes) as $insight) {
-           if (
-               $insight->hasIssue()
-               && $insight->getInsightClass() === OneClassPerFileSniff::class
-           ) {
-               $oneClassPerFileSniffErrors++;
-           }
-       }
+        $oneClassPerFileSniffErrors = 0;
 
-       // No errors of this type as we are ignoring the file.
-       self::assertEquals(0, $oneClassPerFileSniffErrors);
+        foreach ($collection->allFrom(new Classes) as $insight) {
+            if ($insight->hasIssue() && $insight->getInsightClass() === OneClassPerFileSniff::class) {
+                $oneClassPerFileSniffErrors++;
+            }
+        }
+
+        // No errors of this type as we are ignoring the file.
+        self::assertEquals(0, $oneClassPerFileSniffErrors);
     }
 
     public function testCanIgnoreFileInSniffWithRelativePath(): void
@@ -48,23 +46,23 @@ final class SniffDecoratorTest extends TestCase
                 'config' => [
                     OneClassPerFileSniff::class => [
                         'exclude' => [
-                            'Domain/Sniffs/SniffWrapper/FileWithTwoClasses.php'
-                        ]
-                    ]
-                ]
+                            'Domain/Sniffs/SniffWrapper/FileWithTwoClasses.php',
+                        ],
+                    ],
+                ],
             ],
             [
-                __DIR__ . '/../../Fixtures/Domain/Sniffs/SniffWrapper/FileWithTwoClasses.php'
+                __DIR__ . '/../../Fixtures/Domain/Sniffs/SniffWrapper/FileWithTwoClasses.php',
             ],
-            __DIR__ . '/../../Fixtures/'
+            [
+                __DIR__ . '/../../Fixtures/',
+            ]
         );
+
         $oneClassPerFileSniffErrors = 0;
 
         foreach ($collection->allFrom(new Classes) as $insight) {
-            if (
-                $insight->hasIssue()
-                && $insight->getInsightClass() === OneClassPerFileSniff::class
-            ) {
+            if ($insight->hasIssue() && $insight->getInsightClass() === OneClassPerFileSniff::class) {
                 $oneClassPerFileSniffErrors++;
             }
         }
@@ -76,24 +74,71 @@ final class SniffDecoratorTest extends TestCase
     public function testFindMoreThanOneClassInFile(): void
     {
         $collection = $this->runAnalyserOnConfig(
+            [],
             [
-            ],
-            [
-                __DIR__ . '/../../Fixtures/Domain/Sniffs/SniffWrapper/FileWithTwoClasses.php'
+                __DIR__ . '/../../Fixtures/Domain/Sniffs/SniffWrapper/FileWithTwoClasses.php',
             ]
         );
+
         $oneClassPerFileSniffErrors = 0;
 
         foreach ($collection->allFrom(new Classes) as $insight) {
-            if (
-                $insight->hasIssue()
-                && $insight->getInsightClass() === OneClassPerFileSniff::class
-            ) {
+            if ($insight->hasIssue() && $insight->getInsightClass() === OneClassPerFileSniff::class) {
                 $oneClassPerFileSniffErrors++;
             }
         }
 
         // No errors of this type as we are ignoring the file.
         self::assertEquals(1, $oneClassPerFileSniffErrors);
+    }
+
+    public function testConfigExcludeDirectory(): void
+    {
+        $collection = $this->runAnalyserOnConfig(
+            [
+                'config' => [
+                    OneClassPerFileSniff::class => [
+                        'exclude' => [
+                            'Domain/Sniffs/',
+                        ],
+                    ],
+                ],
+            ],
+            [
+                __DIR__ . '/../../Fixtures/Domain/Sniffs/SniffWrapper/FileWithTwoClasses.php',
+            ],
+            [
+                __DIR__ . '/../../Fixtures/',
+            ]
+        );
+
+        $oneClassPerFileSniffErrors = 0;
+
+        foreach ($collection->allFrom(new Classes) as $insight) {
+            if ($insight->hasIssue() && $insight->getInsightClass() === OneClassPerFileSniff::class) {
+                $oneClassPerFileSniffErrors++;
+            }
+        }
+
+        // No errors of this type as we are ignoring the file.
+        self::assertEquals(0, $oneClassPerFileSniffErrors);
+    }
+
+    public function testFixableIssues(): void
+    {
+        $fileToTest = dirname(__DIR__, 2) . '/Feature/Fix/Fixtures/ParamTypeHint.php';
+        $fileExpected = dirname(__DIR__, 2) . '/Feature/Fix/Fixtures/ParamTypeHintExpected.php';
+
+        $initialFileContent = \file_get_contents($fileToTest);
+
+        $this->runAnalyserOnConfig(
+            ['fix' => true],
+            [$fileToTest]
+        );
+
+        self::assertFileEquals($fileExpected, $fileToTest);
+
+        // Restore file content
+        file_put_contents($fileToTest, $initialFileContent);
     }
 }

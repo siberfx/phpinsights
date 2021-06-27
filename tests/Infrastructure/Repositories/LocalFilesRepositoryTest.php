@@ -6,14 +6,12 @@ namespace Tests\Infrastructure\Repositories;
 
 use NunoMaduro\PhpInsights\Infrastructure\Repositories\LocalFilesRepository;
 use Symfony\Component\Finder\Finder;
+use Symfony\Component\Finder\SplFileInfo;
 use Tests\TestCase;
 
 final class LocalFilesRepositoryTest extends TestCase
 {
-    /**
-     * @var string
-     */
-    private $base = __DIR__ . '/../../Fixtures/Tree';
+    private const BASE = __DIR__ . '/../../Fixtures/Tree';
 
     /**
      * @dataProvider provider
@@ -24,7 +22,7 @@ final class LocalFilesRepositoryTest extends TestCase
     {
         $repository = new LocalFilesRepository(Finder::create());
 
-        $files = $repository->within($this->base, $exclude)->getFiles();
+        $files = $repository->within([self::BASE], $exclude)->getFiles();
 
         self::assertCount($expected, $files);
     }
@@ -43,7 +41,7 @@ final class LocalFilesRepositoryTest extends TestCase
             [3, ['FolderA/SubFolderA']],
             [3, ['FolderA/SubFolderA/ClassC.php']],
             [2, ['/(\w).*(A.php)$/']],
-            [2, ['/((\w).*)?(FolderA\/)(\w).*/']]
+            [2, ['/((\w).*)?(FolderA\/)(\w).*/']],
         ];
     }
 
@@ -61,9 +59,9 @@ final class LocalFilesRepositoryTest extends TestCase
         $finder = new Finder();
 
         $repository = new LocalFilesRepository($finder);
-        $repository->within(__DIR__.'/Fixtures/FolderWithBladeFile');
+        $repository->within([__DIR__ . '/Fixtures/FolderWithBladeFile']);
 
-        $files = iterator_to_array($repository->getFiles());
+        $files = $repository->getFiles();
 
         self::assertEmpty($files);
     }
@@ -73,11 +71,17 @@ final class LocalFilesRepositoryTest extends TestCase
         $finder = new Finder();
 
         $repository = new LocalFilesRepository($finder);
-        $repository->within(__DIR__ . '/Fixtures/FileToInspect.php');
-        $files = iterator_to_array($repository->getFiles());
+        $repository->within([__DIR__ . '/Fixtures/FileToInspect.php']);
+        $files = array_values($repository->getFiles());
 
         self::assertCount(1, $files);
-        self::assertInstanceOf(\SplFileInfo::class, $files[0]);
-        self::assertStringContainsString('/Fixtures/FileToInspect.php', $files[0]->getRealPath());
+        self::assertInstanceOf(SplFileInfo::class, $files[0]);
+        $path = $files[0]->getRealPath();
+
+        if ($path !== false) {
+            self::assertStringContainsString('/Fixtures/FileToInspect.php', $path);
+        } else {
+            self::fail('Path cannot be false.');
+        }
     }
 }

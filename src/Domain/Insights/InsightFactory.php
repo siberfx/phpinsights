@@ -4,130 +4,83 @@ declare(strict_types=1);
 
 namespace NunoMaduro\PhpInsights\Domain\Insights;
 
+use Exception;
+use NunoMaduro\PhpInsights\Domain\Collector;
+use NunoMaduro\PhpInsights\Domain\Configuration;
+use NunoMaduro\PhpInsights\Domain\Container;
 use NunoMaduro\PhpInsights\Domain\Contracts\Insight as InsightContract;
+use NunoMaduro\PhpInsights\Domain\Contracts\InsightLoader;
 use NunoMaduro\PhpInsights\Domain\Contracts\Repositories\FilesRepository;
 use NunoMaduro\PhpInsights\Domain\Runner;
-use PHP_CodeSniffer\Sniffs\Sniff as SniffContract;
 use RuntimeException;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * @internal
+ *
+ * @see \Tests\Domain\Insights\InsightFactoryTest
  */
 final class InsightFactory
 {
-    /**
-     * @var \NunoMaduro\PhpInsights\Domain\Contracts\Repositories\FilesRepository
-     */
-    private $filesRepository;
-
-    /**
-     * @var string
-     */
-    private $dir;
+    private FilesRepository $filesRepository;
 
     /**
      * @var array<string>
      */
-    private $insightsClasses;
+    private array $insightsClasses;
 
     /**
-     * @var array<SniffDecorator>
+     * @var array<InsightContract>
      */
-    private $sniffs;
-
-    /** @var bool */
-    private $ran = false;
+    private array $insights = [];
 
     /**
-     * Creates a new instance of Insight Factory
+     * @var array<InsightLoader>
+     */
+    private array $insightLoaders;
+
+    private Configuration $config;
+
+    private bool $ran = false;
+
+    private Collector $collector;
+
+    /**
+     * Creates a new instance of Insight Factory.
      *
-     * @param \NunoMaduro\PhpInsights\Domain\Contracts\Repositories\FilesRepository $filesRepository
-     * @param string $dir
      * @param array<string> $insightsClasses
      */
-    public function __construct(FilesRepository $filesRepository, string $dir, array $insightsClasses)
+    public function __construct(FilesRepository $filesRepository, array $insightsClasses, Configuration $config, Collector $collector)
     {
         $this->filesRepository = $filesRepository;
-        $this->dir = $dir;
         $this->insightsClasses = $insightsClasses;
+        $this->insightLoaders = Container::make()->get(InsightLoader::INSIGHT_LOADER_TAG);
+        $this->config = $config;
+        $this->collector = $collector;
     }
 
     /**
      * Creates a Insight from the given error class.
      *
-     * @param string $errorClass
-     * @param array<string, array> $config
-     * @param OutputInterface $consoleOutput
-     *
-     * @return InsightContract
-     *
-     * @throws \Exception
+     * @throws Exception
      */
-    public function makeFrom(
-        string $errorClass,
-        array $config,
-        OutputInterface $consoleOutput
-    ): InsightContract
+    public function makeFrom(string $errorClass, OutputInterface $consoleOutput): InsightContract
     {
-        switch (true) {
-            case array_key_exists(SniffContract::class, class_implements($errorClass)):
-                $this->runInsightCollector($config, $consoleOutput);
+        $this->runInsightCollector($consoleOutput);
 
-                /** @var SniffDecorator $sniff */
-                foreach ($this->sniffs as $sniff) {
-                    if ($sniff->getInsightClass() === $errorClass) {
-                        return $sniff;
-                    }
-                }
-
-                throw new RuntimeException("The sniff has been removed somehow. This shouldn't happen.");
-            default:
-                throw new RuntimeException(sprintf('Insight `%s` is not instantiable.', $errorClass));
-        }
-    }
-
-    /**
-     * Returns the Sniffs PHP CS classes from the given array of Metrics.
-     *
-     * @param array<string> $insights
-     * @param array<string, array> $config
-     *
-     * @return array<SniffDecorator>
-     */
-    public function sniffsFrom(array $insights, array $config): array
-    {
-        $sniffs = [];
-
-        foreach ($insights as $insight) {
-            if (array_key_exists(SniffContract::class, class_implements($insight))) {
-                /** @var \PHP_CodeSniffer\Sniffs\Sniff $sniff */
-                $sniff = new $insight();
-
-                foreach ($config['config'][$insight] ?? [] as $property => $value) {
-                    $sniff->{$property} = $value;
-                }
-
-                $sniffs[] = new SniffDecorator(
-                    $sniff,
-                    $this->dir
-                );
+        /** @var InsightContract $insight */
+        foreach ($this->insights as $insight) {
+            if ($insight->getInsightClass() === $errorClass) {
+                return $insight;
             }
         }
 
-        return $sniffs;
+        throw new RuntimeException(sprintf('Insight `%s` is not instantiable.', $errorClass));
     }
 
-    /**
-     * @param array<string, mixed> $config
-     * @param \Symfony\Component\Console\Output\OutputInterface $consoleOutput
-     */
-    private function runInsightCollector(
-        array $config,
-        OutputInterface $consoleOutput
-    ): void
+    private function runInsightCollector(OutputInterface $consoleOutput): void
     {
-        if ($this->ran === true) {
+        if ($this->ran) {
             return;
         }
 
@@ -136,13 +89,42 @@ final class InsightFactory
             $this->filesRepository
         );
 
-        // Add php cs sniffs
-        $sniffs = $this->sniffsFrom($this->insightsClasses, $config);
-        $this->sniffs = $sniffs;
-        $runner->addSniffs($sniffs);
+        // Add insights
+        $insights = $this->loadInsights($this->insightsClasses);
+        $this->insights = $insights;
+        $runner->addInsights($insights);
 
         // Run it.
         $runner->run();
         $this->ran = true;
+    }
+
+    /**
+     * Return instantiated insights.
+     *
+     * @param array<string> $insights
+     *
+     * @return array<InsightContract>
+     */
+    private function loadInsights(array $insights): array
+    {
+        $insightsAdded = [];
+        $path = (string) (getcwd() ?? $this->config->getCommonPath());
+
+        foreach ($insights as $insight) {
+            /** @var InsightLoader $loader */
+            foreach ($this->insightLoaders as $loader) {
+                if ($loader->support($insight)) {
+                    $insightsAdded[] = $loader->load(
+                        $insight,
+                        $path,
+                        $this->config->getConfigForInsight($insight),
+                        $this->collector
+                    );
+                }
+            }
+        }
+
+        return $insightsAdded;
     }
 }

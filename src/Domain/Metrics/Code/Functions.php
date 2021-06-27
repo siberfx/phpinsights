@@ -14,6 +14,9 @@ use PHP_CodeSniffer\Standards\Generic\Sniffs\Functions\CallTimePassByReferenceSn
 use PHP_CodeSniffer\Standards\Generic\Sniffs\PHP\DeprecatedFunctionsSniff;
 use PHP_CodeSniffer\Standards\Generic\Sniffs\PHP\ForbiddenFunctionsSniff;
 use PHP_CodeSniffer\Standards\PSR12\Sniffs\Functions\NullableTypeDeclarationSniff;
+use PhpCsFixer\Fixer\FunctionNotation\NoSpacesAfterFunctionNameFixer;
+use PhpCsFixer\Fixer\FunctionNotation\VoidReturnFixer;
+use PhpCsFixer\Fixer\ReturnNotation\ReturnAssignmentFixer;
 use SlevomatCodingStandard\Sniffs\Functions\StaticClosureSniff;
 use SlevomatCodingStandard\Sniffs\Functions\UnusedInheritedVariablePassedToClosureSniff;
 use SlevomatCodingStandard\Sniffs\Functions\UnusedParameterSniff;
@@ -27,7 +30,7 @@ final class Functions implements HasValue, HasPercentage, HasAvg, HasInsights
 
     public function getPercentage(Collector $collector): float
     {
-        return $collector->getLines() > 0 ? ($collector->getFunctionLines() / $collector->getLines()) * 100 : 0;
+        return $collector->getLines() > 0 ? $collector->getFunctionLines() / $collector->getLines() * 100 : 0;
     }
 
     public function getAvg(Collector $collector): string
@@ -49,6 +52,9 @@ final class Functions implements HasValue, HasPercentage, HasAvg, HasInsights
             StaticClosureSniff::class,
             ForbiddenDefineFunctions::class,
             ForbiddenFunctionsSniff::class,
+            NoSpacesAfterFunctionNameFixer::class,
+            ReturnAssignmentFixer::class,
+            VoidReturnFixer::class,
         ];
     }
 }

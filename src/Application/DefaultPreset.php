@@ -8,6 +8,8 @@ use NunoMaduro\PhpInsights\Domain\Contracts\Preset as PresetContract;
 use SlevomatCodingStandard\Sniffs\Commenting\DocCommentSpacingSniff;
 use SlevomatCodingStandard\Sniffs\Namespaces\UnusedUsesSniff;
 use SlevomatCodingStandard\Sniffs\TypeHints\DeclareStrictTypesSniff;
+use SlevomatCodingStandard\Sniffs\TypeHints\PropertyTypeHintSniff;
+use SlevomatCodingStandard\Sniffs\Variables\UnusedVariableSniff;
 
 /**
  * @internal
@@ -19,10 +21,7 @@ final class DefaultPreset implements PresetContract
         return 'default';
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    public static function get(): array
+    public static function get(Composer $composer): array
     {
         return [
             'exclude' => [
@@ -48,14 +47,19 @@ final class DefaultPreset implements PresetContract
                 UnusedUsesSniff::class => [
                     'searchAnnotations' => true,
                 ],
+                UnusedVariableSniff::class => [
+                    'ignoreUnusedValuesWhenOnlyKeysAreUsedInForeach' => true,
+                ],
+                PropertyTypeHintSniff::class => [
+                    'enableNativeTypeHint' => $composer->hasPhpVersion()
+                        ? $composer->lowestPhpVersionIsGreaterThenOrEqualTo('7.4')
+                        : PHP_VERSION_ID >= 70_400,
+                ],
             ],
         ];
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    public static function shouldBeApplied(array $composer): bool
+    public static function shouldBeApplied(Composer $composer): bool
     {
         return true;
     }

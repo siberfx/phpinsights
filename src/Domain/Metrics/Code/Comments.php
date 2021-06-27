@@ -10,16 +10,22 @@ use NunoMaduro\PhpInsights\Domain\Contracts\HasPercentage;
 use NunoMaduro\PhpInsights\Domain\Contracts\HasValue;
 use PHP_CodeSniffer\Standards\Generic\Sniffs\Commenting\FixmeSniff;
 use PHP_CodeSniffer\Standards\Generic\Sniffs\Commenting\TodoSniff;
-use SlevomatCodingStandard\Sniffs\Commenting\EmptyCommentSniff;
+use PhpCsFixer\Fixer\Comment\MultilineCommentOpeningClosingFixer;
+use PhpCsFixer\Fixer\Comment\NoEmptyCommentFixer;
+use PhpCsFixer\Fixer\ControlStructure\NoBreakCommentFixer;
+use PhpCsFixer\Fixer\Phpdoc\PhpdocScalarFixer;
 use SlevomatCodingStandard\Sniffs\Commenting\ForbiddenCommentsSniff;
 use SlevomatCodingStandard\Sniffs\Commenting\InlineDocCommentDeclarationSniff;
+use SlevomatCodingStandard\Sniffs\Commenting\UselessFunctionDocCommentSniff;
 use SlevomatCodingStandard\Sniffs\Commenting\UselessInheritDocCommentSniff;
 use SlevomatCodingStandard\Sniffs\TypeHints\DisallowArrayTypeHintSyntaxSniff;
 use SlevomatCodingStandard\Sniffs\TypeHints\DisallowMixedTypeHintSniff;
 use SlevomatCodingStandard\Sniffs\TypeHints\LongTypeHintsSniff;
 use SlevomatCodingStandard\Sniffs\TypeHints\NullableTypeForNullDefaultValueSniff;
 use SlevomatCodingStandard\Sniffs\TypeHints\NullTypeHintOnLastPositionSniff;
-use SlevomatCodingStandard\Sniffs\TypeHints\TypeHintDeclarationSniff;
+use SlevomatCodingStandard\Sniffs\TypeHints\ParameterTypeHintSniff;
+use SlevomatCodingStandard\Sniffs\TypeHints\PropertyTypeHintSniff;
+use SlevomatCodingStandard\Sniffs\TypeHints\ReturnTypeHintSniff;
 use SlevomatCodingStandard\Sniffs\TypeHints\UselessConstantTypeHintSniff;
 
 final class Comments implements HasValue, HasPercentage, HasInsights
@@ -31,7 +37,7 @@ final class Comments implements HasValue, HasPercentage, HasInsights
 
     public function getPercentage(Collector $collector): float
     {
-        return $collector->getLines() > 0 ? ($collector->getCommentLines() / $collector->getLines()) * 100 : 0;
+        return $collector->getLines() > 0 ? $collector->getCommentLines() / $collector->getLines() * 100 : 0;
     }
 
     /**
@@ -40,7 +46,6 @@ final class Comments implements HasValue, HasPercentage, HasInsights
     public function getInsights(): array
     {
         return [
-            EmptyCommentSniff::class,
             // FullyQualifiedClassNameInAnnotationSniff::class,
             NullableTypeForNullDefaultValueSniff::class,
             FixmeSniff::class,
@@ -51,9 +56,16 @@ final class Comments implements HasValue, HasPercentage, HasInsights
             DisallowMixedTypeHintSniff::class,
             LongTypeHintsSniff::class,
             NullTypeHintOnLastPositionSniff::class,
-            TypeHintDeclarationSniff::class,
+            ParameterTypeHintSniff::class,
+            PropertyTypeHintSniff::class,
+            ReturnTypeHintSniff::class,
+            UselessFunctionDocCommentSniff::class,
             UselessConstantTypeHintSniff::class,
             UselessInheritDocCommentSniff::class,
+            NoBreakCommentFixer::class,
+            MultilineCommentOpeningClosingFixer::class,
+            NoEmptyCommentFixer::class,
+            PhpdocScalarFixer::class,
         ];
     }
 }

@@ -17,8 +17,10 @@ final class Kernel
 {
     /**
      * The app version.
+     *
+     * @noRector Rector\DeadCode\Rector\ClassConst\RemoveUnusedClassConstantRector
      */
-    public const VERSION = 'v1.8.0';
+    public const VERSION = 'v2.0.0';
 
     /**
      * Bootstraps the usage of the package.
@@ -27,15 +29,15 @@ final class Kernel
      */
     public static function bootstrap(): void
     {
-        /**
+        /*
          * Includes PHP Codesniffer's autoload.
          */
         include_once file_exists(__DIR__ . '/../../vendor/squizlabs/php_codesniffer/autoload.php')
             ? __DIR__ . '/../../vendor/squizlabs/php_codesniffer/autoload.php'
             : __DIR__ . '/../../../../../vendor/squizlabs/php_codesniffer/autoload.php';
 
-        /**
-         * Defines PHP Codesniffer's needed constants
+        /*
+         * Defines PHP Codesniffer's needed constants.
          */
         if (! defined('PHP_CODESNIFFER_CBF')) {
             define('PHP_CODESNIFFER_CBF', false);

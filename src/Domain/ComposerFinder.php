@@ -6,13 +6,11 @@ namespace NunoMaduro\PhpInsights\Domain;
 
 use NunoMaduro\PhpInsights\Domain\Exceptions\ComposerNotFound;
 
+/**
+ * @see \Tests\Domain\ComposerFinderTest
+ */
 final class ComposerFinder
 {
-    /**
-     * @param  \NunoMaduro\PhpInsights\Domain\Collector  $collector
-     *
-     * @return string
-     */
     public static function contents(Collector $collector): string
     {
         return (string) file_get_contents(self::getPath($collector));
@@ -20,7 +18,7 @@ final class ComposerFinder
 
     public static function getPath(Collector $collector): string
     {
-        $filePath = $collector->getDir() . '/composer.json';
+        $filePath = $collector->getCommonPath() . 'composer.json';
 
         if (file_exists($filePath)) {
             return $filePath;

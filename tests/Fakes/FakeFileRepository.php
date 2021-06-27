@@ -4,17 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Fakes;
 
-use ArrayIterator;
 use NunoMaduro\PhpInsights\Domain\Contracts\Repositories\FilesRepository;
 use Symfony\Component\Finder\SplFileInfo;
-use Traversable;
 
 final class FakeFileRepository implements FilesRepository
 {
     /**
      * @var array<SplFileInfo>
      */
-    protected $files = [];
+    private array $files;
 
     /**
      * FakeFileRepository constructor.
@@ -23,9 +21,10 @@ final class FakeFileRepository implements FilesRepository
      */
     public function __construct(array $filePaths)
     {
-        $this->files = array_map(function (string $filePath) : SplFileInfo {
-            return new SplFileInfo($filePath, $filePath, $filePath);
-        }, $filePaths);
+        $this->files = array_map(
+            fn (string $filePath): SplFileInfo => new SplFileInfo($filePath, $filePath, $filePath),
+            $filePaths
+        );
     }
 
     public function getDefaultDirectory(): string
@@ -33,12 +32,12 @@ final class FakeFileRepository implements FilesRepository
         return (string) getcwd();
     }
 
-    public function getFiles(): Traversable
+    public function getFiles(): array
     {
-        return new ArrayIterator($this->files);
+        return $this->files;
     }
 
-    public function within(string $dir, array $exclude): FilesRepository
+    public function within(array $paths, array $exclude): FilesRepository
     {
         return $this;
     }

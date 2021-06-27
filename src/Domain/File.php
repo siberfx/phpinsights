@@ -4,49 +4,36 @@ declare(strict_types=1);
 
 namespace NunoMaduro\PhpInsights\Domain;
 
+use NunoMaduro\PhpInsights\Domain\Insights\SniffDecorator;
 use PHP_CodeSniffer\Config;
 use PHP_CodeSniffer\Files\File as BaseFile;
 use PHP_CodeSniffer\Ruleset;
 use PHP_CodeSniffer\Util\Common;
 use Symfony\Component\Finder\SplFileInfo;
+use Throwable;
 
 final class File extends BaseFile
 {
-    /** @var \NunoMaduro\PhpInsights\Domain\Insights\SniffDecorator */
-    private $activeSniff;
-
     /**
      * @var array<array<\NunoMaduro\PhpInsights\Domain\Insights\SniffDecorator>>
      */
-    private $tokenListeners = [];
+    private array $tokenListeners = [];
 
-    /**
-     * @var SplFileInfo
-     */
-    private $fileInfo;
+    private SniffDecorator $activeSniff;
 
-    /**
-     * File constructor.
-     *
-     * @param string $path
-     * @param string $content
-     */
-    public function __construct(string $path, string $content)
+    private SplFileInfo $fileInfo;
+
+    private bool $isFixable;
+
+    private bool $fixEnabled = false;
+
+    public function __construct(string $path, string $content, Config $config, Ruleset $ruleset)
     {
         $this->content = $content;
 
         $this->eolChar = Common::detectLineEndings($content);
 
-        $config = new Config([], false);
-        $config->__set('tabWidth', 4);
-        $config->__set('annotations', false);
-        $config->__set('encoding', 'UTF-8');
-
-        parent::__construct(
-            $path,
-            new Ruleset($config),
-            $config
-        );
+        parent::__construct($path, $ruleset, $config);
     }
 
     public function process(): void
@@ -55,7 +42,7 @@ final class File extends BaseFile
         $this->fixer->startFile($this);
 
         foreach ($this->tokens as $stackPtr => $token) {
-            if (isset($this->tokenListeners[$token['code']]) === false) {
+            if (! isset($this->tokenListeners[$token['code']])) {
                 continue;
             }
 
@@ -64,62 +51,49 @@ final class File extends BaseFile
                 $this->activeSniff = $sniff;
 
                 try {
-                    @$sniff->process($this, $stackPtr);
-                } catch (\Throwable $e) {
+                    $sniff->process($this, $stackPtr);
+                } catch (Throwable $e) {
                     $this->addError('Unparsable php code: syntax error or wrong phpdocs.', $stackPtr, $token['code']);
                 }
             }
         }
-
-        $this->fixedCount += $this->fixer->getFixCount();
-    }
-
-    public function getErrorCount(): int
-    {
-        return 0;
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function getErrors(): array
-    {
-        return [];
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function addFixableError($error,
-                                    $stackPtr,
-                                    $code,
-                                    $data = [],
-                                    $severity = 0): bool
-    {
-        return $this->addError($error, $stackPtr, $code, $data, $severity);
     }
 
     /**
      * @param array<array<\NunoMaduro\PhpInsights\Domain\Insights\SniffDecorator>> $tokenListeners
-     * @param \Symfony\Component\Finder\SplFileInfo $fileInfo
      */
-    public function processWithTokenListenersAndFileInfo(array $tokenListeners,
-                                                         SplFileInfo $fileInfo
-    ): void
-    {
+    public function processWithTokenListenersAndFileInfo(
+        array $tokenListeners,
+        SplFileInfo $fileInfo,
+        bool $isFixable
+    ): void {
         $this->tokenListeners = $tokenListeners;
         $this->fileInfo = $fileInfo;
+        $this->isFixable = $isFixable;
+
         $this->process();
     }
 
     /**
      * Get's the file info from the file.
-     *
-     * @return SplFileInfo
      */
     public function getFileInfo(): SplFileInfo
     {
         return $this->fileInfo;
+    }
+
+    /**
+     * Enable fix mode. It's used to prevent report twice
+     * details because fixer relaunch process method.
+     */
+    public function enableFix(): void
+    {
+        $this->fixEnabled = true;
+    }
+
+    public function disableFix(): void
+    {
+        $this->fixEnabled = false;
     }
 
     /**
@@ -134,9 +108,23 @@ final class File extends BaseFile
         $data,
         $severity,
         $isFixable = false
-    ): bool
-    {
+    ): bool {
         $message = count($data) > 0 ? vsprintf($message, $data) : $message;
+
+        if ($isFixable && $this->isFixable) {
+            if ($this->fixEnabled) {
+                $this->activeSniff->addFileFixed($this->fileInfo->getRelativePathname());
+            } else {
+                $this->fixableCount++;
+            }
+
+            return true;
+        }
+
+        if ($this->fixEnabled) {
+            // detail already added
+            return true;
+        }
 
         $this->activeSniff->addDetails(
             Details::make()

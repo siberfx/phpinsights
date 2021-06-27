@@ -39,6 +39,9 @@
                 },
                 "message": {
                     "type": "string"
+                },
+                "diff": {
+                    "type": "string"
                 }
             }
         }
@@ -62,6 +65,10 @@
                     "$ref": "#/definitions/percentage"
                 },
                 "security issues": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "fixed issues": {
                     "type": "integer",
                     "minimum": 0
                 }

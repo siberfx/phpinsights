@@ -9,18 +9,26 @@ use NunoMaduro\PhpInsights\Application\Adapters\Laravel\Preset as LaravelPreset;
 use NunoMaduro\PhpInsights\Application\Adapters\Magento2\Preset as Magento2Preset;
 use NunoMaduro\PhpInsights\Application\Adapters\Symfony\Preset as SymfonyPreset;
 use NunoMaduro\PhpInsights\Application\Adapters\Yii\Preset as YiiPreset;
+use NunoMaduro\PhpInsights\Application\Console\Formatters\PathShortener;
+use NunoMaduro\PhpInsights\Domain\Configuration;
 use NunoMaduro\PhpInsights\Domain\Contracts\Preset;
-use NunoMaduro\PhpInsights\Domain\Exceptions\PresetNotFound;
+use NunoMaduro\PhpInsights\Domain\Kernel;
+use Symfony\Component\Console\Input\InputInterface;
 
 /**
  * @internal
+ *
+ * @see \Tests\Application\ConfigResolverTest
  */
 final class ConfigResolver
 {
-    /**
-     * @var array<string>
-     */
-    private static $presets = [
+    private const CONFIG_FILENAME = 'phpinsights.php';
+
+    private const COMPOSER_FILENAME = 'composer.json';
+
+    private const DEFAULT_PRESET = 'default';
+
+    private const PRESETS = [
         DrupalPreset::class,
         LaravelPreset::class,
         SymfonyPreset::class,
@@ -32,53 +40,63 @@ final class ConfigResolver
     /**
      * Merge the given config with the specified preset.
      *
-     * @param  array<string, string|int|array>  $config
-     * @param  string  $directory
-     *
-     * @return array<string, array>
+     * @param array<string, string|array> $config
      */
-    public static function resolve(array $config, string $directory): array
+    public static function resolve(array $config, InputInterface $input): Configuration
     {
+        $paths = PathResolver::resolve($input);
+        $config = self::mergeInputRequirements($config, $input);
+        $composer = self::getComposer($input, $paths[0]);
+
         /** @var string $preset */
-        $preset = $config['preset'] ?? self::guess($directory);
+        $preset = $config['preset'] ?? self::guess($composer);
 
         /** @var Preset $presetClass */
-        foreach (self::$presets as $presetClass) {
+        foreach (self::PRESETS as $presetClass) {
             if ($presetClass::getName() === $preset) {
-                return self::mergeConfig($presetClass::get(), $config);
-            }
-        }
+                $presetData = self::preparePreset($presetClass::get($composer), $config);
+                $config = self::mergeConfig($presetData, $config);
 
-        throw new PresetNotFound(sprintf('%s not found', $preset));
-    }
-
-    /**
-     * Guesses the preset based in information from the directory.
-     *
-     * @param  string  $directory
-     *
-     * @return string
-     */
-    public static function guess(string $directory): string
-    {
-        $preset = 'default';
-
-        $composerPath = $directory . DIRECTORY_SEPARATOR . 'composer.json';
-
-        if (! file_exists($composerPath)) {
-            return $preset;
-        }
-
-        $composer = json_decode((string) file_get_contents($composerPath), true);
-
-        foreach (self::$presets as $presetClass) {
-            if ($presetClass::shouldBeApplied($composer)) {
-                $preset = $presetClass::getName();
                 break;
             }
         }
 
-        return $preset;
+        if ($composer->getName() === '') {
+            $config = self::excludeGlobalInsights($config);
+        }
+
+        if (! isset($config['paths'])) {
+            $config['paths'] = $paths;
+        }
+
+        $config['common_path'] = PathShortener::extractCommonPath((array) $config['paths']);
+
+        return new Configuration($config);
+    }
+
+    public static function resolvePath(InputInterface $input): string
+    {
+        /** @var string|null $configPath */
+        $configPath = $input->getOption('config-path');
+        if ($configPath === null && file_exists(getcwd() . DIRECTORY_SEPARATOR . self::CONFIG_FILENAME)) {
+            $configPath = getcwd() . DIRECTORY_SEPARATOR . self::CONFIG_FILENAME;
+        }
+
+        return $configPath ?? '';
+    }
+
+    /**
+     * Guesses the preset based in information from composer.
+     */
+    public static function guess(Composer $composer): string
+    {
+        foreach (self::PRESETS as $presetClass) {
+            if ($presetClass::shouldBeApplied($composer)) {
+                return $presetClass::getName();
+            }
+        }
+
+        return self::DEFAULT_PRESET;
     }
 
     /**
@@ -94,8 +112,10 @@ final class ConfigResolver
         foreach ($replacement as $key => $value) {
             if (! array_key_exists($key, $base) && ! is_numeric($key)) {
                 $base[$key] = $replacement[$key];
+
                 continue;
             }
+
             if (is_array($value) || (array_key_exists($key, $base) && is_array($base[$key]))) {
                 $base[$key] = self::mergeConfig($base[$key], $replacement[$key]);
             } elseif (is_numeric($key)) {
@@ -108,5 +128,87 @@ final class ConfigResolver
         }
 
         return $base;
+    }
+
+    /**
+     * Merge requirements config from console input.
+     *
+     * @param array<string, string|array> $config
+     *
+     * @return array<string, string|array>
+     */
+    private static function mergeInputRequirements(array $config, InputInterface $input): array
+    {
+        $requirements = Configuration::getAcceptedRequirements();
+        foreach ($requirements as $requirement) {
+            if ($input->hasParameterOption('--' . $requirement)) {
+                $config['requirements'][$requirement] = $input->getOption($requirement);
+            }
+        }
+
+        return $config;
+    }
+
+    private static function getComposer(InputInterface $input, string $path): Composer
+    {
+        /** @var string|null $composerPath */
+        $composerPath = $input->hasOption('composer') ? $input->getOption('composer') : null;
+
+        if ($composerPath === null) {
+            $composerPath = rtrim($path, '/') . DIRECTORY_SEPARATOR . self::COMPOSER_FILENAME;
+        }
+        if (strpos($composerPath, self::COMPOSER_FILENAME) === false) {
+            return new Composer([]);
+        }
+        if (! file_exists($composerPath)) {
+            return new Composer([]);
+        }
+
+        return Composer::fromPath($composerPath);
+    }
+
+    /**
+     * @param array<string, string|array> $config
+     *
+     * @return array<string, string|array>
+     */
+    private static function excludeGlobalInsights(array $config): array
+    {
+        foreach (Kernel::getGlobalInsights() as $insight) {
+            $config['remove'][] = $insight;
+        }
+
+        return $config;
+    }
+
+    /**
+     * @param array<string, array|string|int> $preset
+     * @param array<string, array|string> $config
+     *
+     * @return array<string, array|int|string>
+     */
+    private static function preparePreset(array $preset, array $config): array
+    {
+        $removedRulesByPreset = [];
+        $addedRulesByConfig = [];
+
+        if (isset($preset['remove']) && is_array($preset['remove']) && count($preset['remove']) > 0) {
+            array_walk_recursive($preset['remove'], static function ($value) use (&$removedRulesByPreset): void {
+                $removedRulesByPreset[] = $value;
+            });
+        }
+
+        if (isset($config['add']) && is_array($config['add']) && count($config['add']) > 0) {
+            array_walk_recursive($config['add'], static function ($value) use (&$addedRulesByConfig): void {
+                $addedRulesByConfig[] = $value;
+            });
+        }
+
+        $intersectRules = array_intersect($addedRulesByConfig, $removedRulesByPreset);
+
+        // Config rules have more priority against preset rules, so we should override them.
+        $preset['remove'] = array_diff($removedRulesByPreset, $intersectRules);
+
+        return $preset;
     }
 }

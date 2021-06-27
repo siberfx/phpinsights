@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NunoMaduro\PhpInsights\Application\Adapters\Symfony;
 
+use NunoMaduro\PhpInsights\Application\Composer;
 use NunoMaduro\PhpInsights\Application\ConfigResolver;
 use NunoMaduro\PhpInsights\Application\DefaultPreset;
 use NunoMaduro\PhpInsights\Domain\Contracts\Preset as PresetContract;
@@ -19,10 +20,7 @@ final class Preset implements PresetContract
         return 'symfony';
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    public static function get(): array
+    public static function get(Composer $composer): array
     {
         $config = [
             'exclude' => [
@@ -41,23 +39,21 @@ final class Preset implements PresetContract
             ],
         ];
 
-        return ConfigResolver::mergeConfig(DefaultPreset::get(), $config);
+        return ConfigResolver::mergeConfig(DefaultPreset::get($composer), $config);
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    public static function shouldBeApplied(array $composer): bool
+    public static function shouldBeApplied(Composer $composer): bool
     {
-        /** @var array<string> $requirements */
-        $requirements = $composer['require'] ?? [];
+        $requirements = $composer->getRequirements();
 
         foreach (array_keys($requirements) as $requirement) {
-            $requirement = (string) $requirement;
-
-            if (strpos($requirement, 'symfony/framework-bundle') !== false
-                || strpos($requirement, 'symfony/flex') !== false
-                || strpos($requirement, 'symfony/symfony') !== false) {
+            if (strpos($requirement, 'symfony/framework-bundle') !== false) {
+                return true;
+            }
+            if (strpos($requirement, 'symfony/flex') !== false) {
+                return true;
+            }
+            if (strpos($requirement, 'symfony/symfony') !== false) {
                 return true;
             }
         }

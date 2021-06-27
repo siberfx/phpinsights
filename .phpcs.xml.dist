@@ -14,7 +14,7 @@
     <arg name="colors"/>
     <arg name="parallel" value="75"/>
     <arg value="p"/>
-    <ini name="memory_limit" value="128M"/>
+    <ini name="memory_limit" value="512M"/>
 
     <!-- Configs -->
     <config name="installed_paths" value="vendor/slevomat/coding-standard"/>
@@ -142,15 +142,16 @@
     <rule ref="SlevomatCodingStandard.Commenting.EmptyComment"/>
     <rule ref="SlevomatCodingStandard.Commenting.ForbiddenComments"/>
     <rule ref="SlevomatCodingStandard.Commenting.InlineDocCommentDeclaration"/>
+    <rule ref="SlevomatCodingStandard.Commenting.UselessFunctionDocComment"/>
     <rule ref="SlevomatCodingStandard.Commenting.UselessInheritDocComment"/>
     <rule ref="SlevomatCodingStandard.TypeHints.DisallowArrayTypeHintSyntax"/>
     <rule ref="SlevomatCodingStandard.TypeHints.DisallowMixedTypeHint"/>
     <rule ref="SlevomatCodingStandard.TypeHints.LongTypeHints"/>
     <rule ref="SlevomatCodingStandard.TypeHints.NullableTypeForNullDefaultValue"/>
     <rule ref="SlevomatCodingStandard.TypeHints.NullTypeHintOnLastPosition"/>
-    <rule ref="SlevomatCodingStandard.TypeHints.TypeHintDeclaration">
-        <exclude phpcbf-only="true" name="SlevomatCodingStandard.TypeHints.TypeHintDeclaration"/>
-    </rule>-->
+    <rule ref="SlevomatCodingStandard.TypeHints.ParameterTypeHint"/>
+    <rule ref="SlevomatCodingStandard.TypeHints.PropertyTypeHint"/>
+    <rule ref="SlevomatCodingStandard.TypeHints.ReturnTypeHint"/>
     <rule ref="SlevomatCodingStandard.TypeHints.UselessConstantTypeHint"/>
 
     <!-- Code > Functions -->
@@ -195,26 +196,4 @@
 
     <!-- Complexity -->
     <!-- -->
-
-    <!-- Object calisthenics -->
-    <rule ref="vendor/object-calisthenics/phpcs-calisthenics-rules/src/ObjectCalisthenics/ruleset.xml">
-        <exclude name="ObjectCalisthenics.ControlStructures.NoElse"/>
-        <exclude name="ObjectCalisthenics.CodeAnalysis.OneObjectOperatorPerLine"/>
-
-        <!-- Code > Classes -->
-        <exclude name="ObjectCalisthenics.Classes.ForbiddenPublicProperty"/>
-        <exclude name="ObjectCalisthenics.NamingConventions.NoSetter"/>
-
-        <!-- Code > Code -->
-        <exclude name="ObjectCalisthenics.Metrics.MaxNestingLevel"/>
-        <exclude name="ObjectCalisthenics.NamingConventions.ElementNameMinimalLength"/>
-
-        <!-- Architecture > Classes -->
-        <exclude name="ObjectCalisthenics.Files.ClassTraitAndInterfaceLength"/>
-        <exclude name="ObjectCalisthenics.Metrics.MethodPerClassLimit"/>
-        <exclude name="ObjectCalisthenics.Metrics.PropertyPerClassLimit"/>
-
-        <!-- Architecture > Functions -->
-        <exclude name="ObjectCalisthenics.Files.FunctionLength"/>
-    </rule>
 </ruleset>

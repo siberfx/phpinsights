@@ -11,12 +11,14 @@ final class ForbiddenFinalClasses extends Insight implements HasDetails
 {
     public function hasIssue(): bool
     {
-        return (bool) count($this->collector->getConcreteFinalClasses());
+        return (bool) count($this->getDetails());
     }
 
     public function getTitle(): string
     {
-        return array_key_exists('title', $this->config) ? (string) $this->config['title'] : 'The use of `final` classes is prohibited';
+        return array_key_exists('title', $this->config)
+            ? (string) $this->config['title']
+            : 'The use of `final` classes is prohibited';
     }
 
     /**
@@ -24,8 +26,12 @@ final class ForbiddenFinalClasses extends Insight implements HasDetails
      */
     public function getDetails(): array
     {
-        return array_map(static function (string $name): Details {
-            return Details::make()->setFile($name);
-        }, $this->collector->getConcreteFinalClasses());
+        $concreteFinalClasses = $this->collector->getConcreteFinalClasses();
+        $concreteFinalClasses = array_flip($this->filterFilesWithoutExcluded(array_flip($concreteFinalClasses)));
+
+        return array_values(array_map(
+            static fn (string $name): Details => Details::make()->setFile($name),
+            $concreteFinalClasses
+        ));
     }
 }

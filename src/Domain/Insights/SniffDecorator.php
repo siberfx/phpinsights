@@ -4,35 +4,44 @@ declare(strict_types=1);
 
 namespace NunoMaduro\PhpInsights\Domain\Insights;
 
-use NunoMaduro\PhpInsights\Domain\Contracts\HasDetails;
+use NunoMaduro\PhpInsights\Domain\Contracts\DetailsCarrier;
+use NunoMaduro\PhpInsights\Domain\Contracts\Fixable;
 use NunoMaduro\PhpInsights\Domain\Contracts\Insight;
 use NunoMaduro\PhpInsights\Domain\Details;
 use NunoMaduro\PhpInsights\Domain\File as InsightFile;
+use NunoMaduro\PhpInsights\Domain\Helper\Files;
 use PHP_CodeSniffer\Files\File;
 use PHP_CodeSniffer\Sniffs\Sniff;
 
 /**
  * Decorates original php-cs sniffs with additional behavior.
+ *
+ * @internal
+ *
+ * @see \Tests\Domain\Sniffs\SniffDecoratorTest
  */
-final class SniffDecorator implements Sniff, Insight, HasDetails
+final class SniffDecorator implements Sniff, Insight, DetailsCarrier, Fixable
 {
-    /**
-     * @var \PHP_CodeSniffer\Sniffs\Sniff
-     */
-    private $sniff;
+    use FixPerFileCollector;
+
+    private Sniff $sniff;
 
     /** @var array<\NunoMaduro\PhpInsights\Domain\Details> */
-    private $errors = [];
+    private array $errors = [];
 
     /**
-     * @var string
+     * @var array<string, \Symfony\Component\Finder\SplFileInfo>
      */
-    private $dir;
+    private array $excludedFiles;
 
     public function __construct(Sniff $sniff, string $dir)
     {
         $this->sniff = $sniff;
-        $this->dir = $dir;
+        $this->excludedFiles = [];
+
+        if (count($this->getIgnoredFilesPath()) > 0) {
+            $this->excludedFiles = Files::find($dir, $this->getIgnoredFilesPath());
+        }
     }
 
     /**
@@ -44,10 +53,11 @@ final class SniffDecorator implements Sniff, Insight, HasDetails
     }
 
     /**
-     * @param \PHP_CodeSniffer\Files\File $file
      * @param int $stackPtr
      *
      * @return int|void
+     *
+     * @phpcsSuppress SlevomatCodingStandard.TypeHints.ParameterTypeHint.MissingNativeTypeHint
      */
     public function process(File $file, $stackPtr)
     {
@@ -56,38 +66,6 @@ final class SniffDecorator implements Sniff, Insight, HasDetails
         }
 
         return $this->sniff->process($file, $stackPtr);
-    }
-
-    private function skipFilesFromIgnoreFiles(InsightFile $file): bool
-    {
-        $path = $file->getFileInfo()->getRealPath();
-
-        if ($path === false) {
-            return false;
-        }
-
-        foreach ($this->getIgnoredFilesPath() as $ignoredFilePath) {
-            if (self::pathsAreEqual($this->dir . DIRECTORY_SEPARATOR . $ignoredFilePath, $path)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Contains the setting for all files which the sniff should ignore.
-     *
-     * @return array<int, string>
-     */
-    private function getIgnoredFilesPath(): array
-    {
-        return $this->sniff->exclude ?? [];
-    }
-
-    private static function pathsAreEqual(string $pathA, string $pathB): bool
-    {
-        return realpath($pathA) === realpath($pathB);
     }
 
     /**
@@ -102,8 +80,6 @@ final class SniffDecorator implements Sniff, Insight, HasDetails
 
     /**
      * Checks if the insight detects an issue.
-     *
-     * @return bool
      */
     public function hasIssue(): bool
     {
@@ -112,15 +88,13 @@ final class SniffDecorator implements Sniff, Insight, HasDetails
 
     /**
      * Gets the title of the insight.
-     *
-     * @return string
      */
     public function getTitle(): string
     {
         $sniffClass = $this->getInsightClass();
 
         $path = explode('\\', $sniffClass);
-        $name = (string) array_pop($path);
+        $name = array_pop($path);
 
         $name = str_replace('Sniff', '', $name);
 
@@ -128,7 +102,7 @@ final class SniffDecorator implements Sniff, Insight, HasDetails
             mb_strtolower(
                 trim(
                     (string) preg_replace(
-                        '/(?<!\ )[A-Z]/',
+                        '/(?<! )[A-Z]/',
                         ' $0',
                         $name
                     )
@@ -139,8 +113,6 @@ final class SniffDecorator implements Sniff, Insight, HasDetails
 
     /**
      * Get the class name of Insight used.
-     *
-     * @return string
      */
     public function getInsightClass(): string
     {
@@ -150,5 +122,23 @@ final class SniffDecorator implements Sniff, Insight, HasDetails
     public function addDetails(Details $details): void
     {
         $this->errors[] = $details;
+    }
+
+    private function skipFilesFromIgnoreFiles(InsightFile $file): bool
+    {
+        return array_key_exists(
+            (string) $file->getFileInfo()->getRealPath(),
+            $this->excludedFiles
+        );
+    }
+
+    /**
+     * Contains the setting for all files which the sniff should ignore.
+     *
+     * @return array<int, string>
+     */
+    private function getIgnoredFilesPath(): array
+    {
+        return $this->sniff->exclude ?? [];
     }
 }

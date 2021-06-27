@@ -6,6 +6,8 @@ namespace Tests;
 
 use NunoMaduro\PhpInsights\Application\ConfigResolver;
 use NunoMaduro\PhpInsights\Domain\Analyser as DomainAnalyser;
+use NunoMaduro\PhpInsights\Domain\Configuration;
+use NunoMaduro\PhpInsights\Domain\Container;
 use NunoMaduro\PhpInsights\Domain\Insights\InsightCollection;
 use NunoMaduro\PhpInsights\Domain\Insights\InsightCollectionFactory;
 use NunoMaduro\PhpInsights\Domain\MetricsFinder;
@@ -17,13 +19,19 @@ use ReflectionClass;
 use ReflectionException;
 use Symfony\Component\Console\Output\NullOutput;
 use Tests\Fakes\FakeFileRepository;
+use Tests\Fakes\FakeInput;
 
 abstract class TestCase extends BaseTestCase
 {
     /**
+     * @var array<string>
+     */
+    private array $initialArgv;
+
+    /**
      * Call protected/private method of a class.
      *
-     * @param  string  $class Instantiated object that we will run method on
+     * @param  class-string  $class Instantiated object that we will run method on
      * @param  string  $methodName Method name to call
      * @param  array<int, mixed>  $parameters Array of parameters to pass into method
      *
@@ -31,7 +39,7 @@ abstract class TestCase extends BaseTestCase
      *
      * @throws ReflectionException
      */
-    public function invokeStaticMethod(
+    final public static function invokeStaticMethod(
         string $class,
         string $methodName,
         array $parameters
@@ -48,18 +56,19 @@ abstract class TestCase extends BaseTestCase
      *
      * @param string $preset
      * @param array<string>  $filePaths
-     * @param string $dir
+     * @param array<string> $paths
+     *
      * @return InsightCollection
      */
-    public function runAnalyserOnPreset(
+    final public function runAnalyserOnPreset(
         string $preset,
         array $filePaths,
-        string $dir = ''
+        array $paths = []
     ) : InsightCollection {
         return $this->runAnalyserOnConfig(
             ['preset' => $preset],
             $filePaths,
-            $dir
+            $paths
         );
     }
 
@@ -68,15 +77,26 @@ abstract class TestCase extends BaseTestCase
      *
      * @param array<string, mixed> $config
      * @param array<string> $filePaths
-     * @param string        $dir
+     * @param array<string> $paths
+     *
      * @return InsightCollection
      */
-    public function runAnalyserOnConfig(
+    final public function runAnalyserOnConfig(
         array $config,
         array $filePaths,
-        string $dir = ''
+        array $paths = []
     ) : InsightCollection {
-        $config = ConfigResolver::resolve($config, $dir);
+        if ($paths === []) {
+            $paths = [\dirname($filePaths[0])];
+        }
+
+        $config = ConfigResolver::resolve($config, FakeInput::paths($paths));
+
+        $container = Container::make();
+        \assert($container instanceof \League\Container\Container);
+
+        $configurationDefinition = $container->extend(Configuration::class);
+        $configurationDefinition->setConcrete($config);
 
         $analyser = new DomainAnalyser();
 
@@ -84,15 +104,13 @@ abstract class TestCase extends BaseTestCase
 
         $insightCollectionFactory = new InsightCollectionFactory(
             $fileRepository,
-            $analyser
+            $analyser,
+            $config
         );
-
 
         return $insightCollectionFactory->get(
             MetricsFinder::find(),
-            $config,
-            $dir,
-            new NullOutput
+            new NullOutput()
         );
     }
 
@@ -100,13 +118,13 @@ abstract class TestCase extends BaseTestCase
      * Prepares a supplied fixture for a supplied sniffer class with the
      * supplied properties.
      *
-     * @param string                              $sniffClassName
+     * @param class-string                        $sniffClassName
      * @param string                              $fixtureFile
      * @param array<string, string|array<string>> $properties
      * @return LocalFile
      * @throws ReflectionException
      */
-    public static function prepareFixtureWithSniff(
+    final public static function prepareFixtureWithSniff(
         string $sniffClassName,
         string $fixtureFile,
         array $properties = []
@@ -128,15 +146,21 @@ abstract class TestCase extends BaseTestCase
         $ruleset->ruleset = [
             "PhpInsights.Sniffs.{$ruleName}" => [
                 'properties' => $properties,
-            ]
+            ],
         ];
 
         $ruleset->registerSniffs($sniffs, [], []);
         $ruleset->populateTokenListeners();
+
         return new LocalFile($fixtureFile, $ruleset, $config);
     }
 
-    public static function getFilePathFromClass(string $className) : string
+    /**
+     * @param class-string $className
+     * @return string
+     * @throws \ReflectionException
+     */
+    final public static function getFilePathFromClass(string $className) : string
     {
         $reflector = new ReflectionClass($className);
 
@@ -144,4 +168,21 @@ abstract class TestCase extends BaseTestCase
 
         return $filename === false ? '' : $filename;
     }
+
+
+    protected function setUp(): void
+    {
+        // Replace temporarily current binary by phpinsights one, to execute subprocess
+        $this->initialArgv = $_SERVER['argv'];
+        $_SERVER['argv'] = [getcwd() . '/bin/phpinsights'];
+
+        parent::setUp();
+    }
+
+    protected function tearDown(): void
+    {
+        $_SERVER['argv'] = $this->initialArgv;
+        parent::tearDown();
+    }
+
 }

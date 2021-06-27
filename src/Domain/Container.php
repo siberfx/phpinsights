@@ -11,14 +11,8 @@ use Psr\Container\ContainerInterface;
  */
 final class Container
 {
-    /**
-     * @var \Psr\Container\ContainerInterface
-     */
-    private static $container;
+    private static ?ContainerInterface $container = null;
 
-    /**
-     * @return \Psr\Container\ContainerInterface
-     */
     public static function make(): ContainerInterface
     {
         if (self::$container === null) {

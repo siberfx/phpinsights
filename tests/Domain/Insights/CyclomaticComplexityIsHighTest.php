@@ -4,42 +4,39 @@ declare(strict_types=1);
 
 namespace Tests\Domain\Insights;
 
+use NunoMaduro\PhpInsights\Application\Console\Formatters\PathShortener;
 use NunoMaduro\PhpInsights\Domain\Analyser;
 use NunoMaduro\PhpInsights\Domain\Collector;
+use NunoMaduro\PhpInsights\Domain\Details;
 use NunoMaduro\PhpInsights\Domain\Insights\CyclomaticComplexityIsHigh;
-use NunoMaduro\PhpInsights\Domain\Insights\InsightCollectionFactory;
-use PHPUnit\Framework\TestCase;
-use Tests\Fakes\FakeFileRepository;
+use NunoMaduro\PhpInsights\Domain\Metrics\Complexity\Complexity;
+use Tests\TestCase;
 
 final class CyclomaticComplexityIsHighTest extends TestCase
 {
     public function testClassHasNoCyclomaticComplexity(): void
     {
-        $collector = new Collector(__DIR__ . '/Fixtures/');
+        $path = __DIR__ . '/Fixtures/';
+        $collector = new Collector([$path], PathShortener::extractCommonPath([$path]));
         $insight = new CyclomaticComplexityIsHigh($collector, []);
 
         self::assertFalse($insight->hasIssue());
-        self::assertIsArray($insight->getDetails());
+        self::assertCount(0, $insight->getDetails());
     }
 
     public function testClassHasToMuchCyclomaticComplexity(): void
     {
-        $analyser = new Analyser();
-
         $files = [
             __DIR__ . '/Fixtures/LittleToComplexClass.php',
             __DIR__ . '/Fixtures/VeryMuchToComplexClass.php',
         ];
 
-        $fileRepository = new FakeFileRepository($files);
+        $commonPath = PathShortener::extractCommonPath($files);
 
-        $insightCollectionFactory = new InsightCollectionFactory(
-            $fileRepository,
-            $analyser
-        );
         $analyzer = new Analyser();
-        $collector = $analyzer->analyse(__DIR__ . '/Fixtures/', $files);
+        $collector = $analyzer->analyse([__DIR__ . '/Fixtures/'], $files, $commonPath);
         $insight = new CyclomaticComplexityIsHigh($collector, []);
+        $insight->process();
 
         self::assertTrue($insight->hasIssue());
         self::assertIsArray($insight->getDetails());
@@ -47,10 +44,10 @@ final class CyclomaticComplexityIsHighTest extends TestCase
 
         $messages = [];
         $files = [];
-        /** @var \NunoMaduro\PhpInsights\Domain\Details $detail */
+        /** @var Details $detail */
         foreach ($insight->getDetails() as $detail) {
             $messages[] = $detail->getMessage();
-            $files[] = $detail->getFile();
+            $files[] = PathShortener::fileName($detail, $commonPath);
         }
 
         self::assertContains('LittleToComplexClass.php', $files);
@@ -62,22 +59,17 @@ final class CyclomaticComplexityIsHighTest extends TestCase
 
     public function testClassWeCanConfigureTheMaxComplexity(): void
     {
-        $analyser = new Analyser();
-
         $files = [
             __DIR__ . '/Fixtures/LittleToComplexClass.php',
             __DIR__ . '/Fixtures/VeryMuchToComplexClass.php',
         ];
 
-        $fileRepository = new FakeFileRepository($files);
+        $commonPath = PathShortener::extractCommonPath($files);
 
-        $insightCollectionFactory = new InsightCollectionFactory(
-            $fileRepository,
-            $analyser
-        );
         $analyzer = new Analyser();
-        $collector = $analyzer->analyse(__DIR__ . '/Fixtures/', $files);
+        $collector = $analyzer->analyse([__DIR__ . '/Fixtures/'], $files, $commonPath);
         $insight = new CyclomaticComplexityIsHigh($collector, ['maxComplexity' => 10]);
+        $insight->process();
 
         self::assertTrue($insight->hasIssue());
         self::assertIsArray($insight->getDetails());
@@ -85,10 +77,10 @@ final class CyclomaticComplexityIsHighTest extends TestCase
 
         $messages = [];
         $files = [];
-        /** @var \NunoMaduro\PhpInsights\Domain\Details $detail */
+        /** @var Details $detail */
         foreach ($insight->getDetails() as $detail) {
             $messages[] = $detail->getMessage();
-            $files[] = $detail->getFile();
+            $files[] = PathShortener::fileName($detail, $commonPath);
         }
 
         self::assertNotContains('LittleToComplexClass.php', $files);
@@ -96,5 +88,26 @@ final class CyclomaticComplexityIsHighTest extends TestCase
 
         self::assertContains('VeryMuchToComplexClass.php', $files);
         self::assertContains('13 cyclomatic complexity', $messages);
+    }
+
+    public function testItNoReturnIssueWhenFileExcluded(): void
+    {
+        $fileLocation = __DIR__ . '/Fixtures/VeryMuchToComplexClass.php';
+        $collection = $this->runAnalyserOnConfig(
+            [
+                'config' => [
+                    CyclomaticComplexityIsHigh::class => [
+                        'exclude' => [$fileLocation],
+                    ],
+                ],
+            ],
+            [$fileLocation]
+        );
+
+        foreach ($collection->allFrom(new Complexity()) as $insight) {
+            if ($insight->getInsightClass() === CyclomaticComplexityIsHigh::class) {
+                self::assertFalse($insight->hasIssue());
+            }
+        }
     }
 }

@@ -28,6 +28,11 @@ Then, use the `insights` Artisan command:
 php artisan insights
 ```
 
+> Note for Laravel 7 users: phpinsights requires [PHP 7.3+](https://php.net/releases/), and `PHPUnit 9.0+`. For upgrading PHPUnit, you can use following command:
+ ```bash
+ composer require --dev phpunit/phpunit:^9.0 --update-with-dependencies
+ ```
+
 ## Within Lumen
 
 Because we cannot use Artisan's publish command within a Lumen project you must manually copy the config file into your project:
@@ -48,7 +53,6 @@ And setup is done, so you can now run `phpinsights` with the following command:
 ```bash
 php artisan insights
 ```
-
 
 ## With Docker
 
@@ -75,12 +79,60 @@ In laravel, launch command as usual with your path:
 php artisan insights path/to/analyse
 ```
 
+## Fixing errors automatically <Badge text="^2.0"/>
+
+Some Insights support automatic fixing. 
+To fix your code automatically, two way are possibles: 
+
+* Add `--fix` option to your command. The output will be the classical output, with a summary of all issues fixed.
+* Or launch `phpinsights fix [directory]`
+
+```bash
+# Classical command with --fix option
+vendor/bin/phpinsights analyse path/to/analyse --fix
+
+# In laravel
+php artisan insights path/to/analyse --fix
+
+# Just fix
+vendor/bin/phpinsights fix path/to/analyse
+```
+
+## Analyse multiple paths <Badge text="^2.0"/>
+You can ask `phpinsights` to analyse multiple directories, multiple files or even combining them by providing multiple paths with `analyse` command:
+
+```bash
+# For multiple directories
+./vendor/bin/phpinsights analyse path/to/dir1 path/to/dir2
+
+# For multiple files
+./vendor/bin/phpinsights analyse path/to/file1.php path/to/file2.php
+
+# Combined
+./vendor/bin/phpinsights analyse path/to/dir path/to/file.php
+```
+
+In laravel, launch command as usual with your paths:
+
+```bash
+php artisan insights path/to/dir path/to/file.php
+```
+
+## Specify composer file <Badge text="^2.0"/>
+
+Optionally, you can specify your composer file by adding the `composer` flag as below:
+
+```bash
+./vendor/bin/phpinsights analyse --composer=/var/www/composer.json
+```
+
 ## Formatting the output
 
 For changing the output format you can add the `format` flag. The following formats are supported:
 
 - console
 - json
+- checkstyle
 
 ```bash
 ./vendor/bin/phpinsights analyse --format=json
@@ -88,7 +140,7 @@ For changing the output format you can add the `format` flag. The following form
 
 ## Saving output to file
 
-You can pipe the result to a file or to anywhere you like. 
+You can pipe the result to a file or to anywhere you like.
 A common use case is parsing the output formatted as json to a json file.
 
 ```bash
@@ -97,8 +149,6 @@ A common use case is parsing the output formatted as json to a json file.
 
 When piping the result remember to add the no interaction flag `-n`, as the part where you need to interact is also getting piped. (the json format does not have any interaction)
 While piping data, if you want the progress bar to refresh itself instead of printing a new one, add the `--ansi` flag.
-
-
 
 ## Allowed memory size of X bytes exhausted
 
@@ -109,7 +159,7 @@ php -d memory_limit=2000M ./vendor/bin/phpinsights
 
 ## Display issues omitted
 
-PHP Insights console command have different verbosity levels, which determine the quantity of issues displayed. By default, commands display only the 3 first issues per `Insight`, but you can display them all with the `-v` option:
+The PHP Insights console command has different verbosity levels, which determine the quantity of issues displayed. By default, commands display only the 3 first issues per `Insight`, but you can display them all with the `-v` option:
 ```bash
 ./vendor/bin/phpinsights -v
 ```
@@ -122,4 +172,24 @@ If you have trouble while requiring `phpinsights` with composer, try install it 
 composer require --dev bamarni/composer-bin-plugin
 composer bin phpinsights require nunomaduro/phpinsights
 ./vendor/bin/phpinsights
+```
+
+## Flush cache results <Badge text="^2.0"/>
+
+Between 2 analysis, issues are cached. 
+PHPInsights is smart enough to invalidate cache when it detect changes in your code, but you may completly flush cache before analysis by adding `--flush-cache` flag.
+
+## Configure diff <Badge text="^2.0"/>
+
+Some insights display a diff output.
+If you want more context on the diff, configure it in the `phpinsights.php` file:
+
+```php
+<?php
+
+return [
+    // ...
+    'diff_context' => 3,
+    // ...
+];
 ```

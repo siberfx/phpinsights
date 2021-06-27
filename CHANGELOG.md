@@ -4,6 +4,122 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [v2.0.0]
+### Added
+- Minimal PHP version is now PHP 7.4 ([#391](https://github.com/nunomaduro/phpinsights/pull/391))
+- Support multiple path to analyse ([#384](https://github.com/nunomaduro/phpinsights/pull/384))
+- Autofixer ([#337](https://github.com/nunomaduro/phpinsights/pull/337))
+- Syntax check Insight is now using [PHP-Parallel-lint](https://github.com/php-parallel-lint/PHP-Parallel-Lint) ([#373](https://github.com/nunomaduro/phpinsights/pull/373), [#437](https://github.com/nunomaduro/phpinsights/pull/437), [#487](https://github.com/nunomaduro/phpinsights/pull/487)) 
+- Cache on analysis ([#407](https://github.com/nunomaduro/phpinsights/pull/407))
+- Allow to override preset config ([#420](https://github.com/nunomaduro/phpinsights/pull/420))
+- Support Composer v2 ([#433](https://github.com/nunomaduro/phpinsights/pull/433), [#442](https://github.com/nunomaduro/phpinsights/pull/442))
+- Support phploc v7 ([#428](https://github.com/nunomaduro/phpinsights/pull/428))
+- Parallelization of analysis ([#414](https://github.com/nunomaduro/phpinsights/pull/414))
+- Support PHP8 ([#448](https://github.com/nunomaduro/phpinsights/pull/448))
+- CheckStyle report use the dot notation format to be using with Checkstyle parsers ([#464](https://github.com/nunomaduro/phpinsights/pull/464)) 
+- Allow to use `version` in composer.json ([#473](https://github.com/nunomaduro/phpinsights/pull/473)) 
+- Upgrade to [Slevomat/Coding-standard v7](https://github.com/slevomat/coding-standard) ([#477](https://github.com/nunomaduro/phpinsights/pull/477))
+- New option to show summary only ([#481](https://github.com/nunomaduro/phpinsights/pull/481))
+- Support PHP-CS-Fixer v3 ([#490](https://github.com/nunomaduro/phpinsights/pull/490))
+- CodeClimate Formatter ([#498](https://github.com/nunomaduro/phpinsights/pull/498))
+- Configuring Fixers indentation ([#502](https://github.com/nunomaduro/phpinsights/pull/502))
+- Diff output configurable ([#482](https://github.com/nunomaduro/phpinsights/pull/482))
+
+### Fixed
+- Performance issues ([#382](https://github.com/nunomaduro/phpinsights/pull/382), [#387](https://github.com/nunomaduro/phpinsights/pull/387), [#405](https://github.com/nunomaduro/phpinsights/pull/405))
+- Check that lock file exist ([#389](https://github.com/nunomaduro/phpinsights/pull/389))
+- Avoid conflict with phpcs config file ([#402](https://github.com/nunomaduro/phpinsights/pull/402))
+- Clean display message without file target ([#404](https://github.com/nunomaduro/phpinsights/pull/404))
+- IDE Link with colors ([#413](https://github.com/nunomaduro/phpinsights/pull/413))
+- No error trigger when Details Message issue contains console styling ([#447](https://github.com/nunomaduro/phpinsights/pull/447))
+- Excluded files from Cyclomatic Complexity are no more take in account for score ([#460](https://github.com/nunomaduro/phpinsights/pull/460))
+
+### Changed
+- Refactoring code ([#391](https://github.com/nunomaduro/phpinsights/pull/391), [#393](https://github.com/nunomaduro/phpinsights/pull/393))
+- Process Security Checks during the project inspection ([#406](https://github.com/nunomaduro/phpinsights/pull/406)) 
+- Drop Travis-CI and use GithubAction ([#448](https://github.com/nunomaduro/phpinsights/pull/448))
+- Drop `object-calisthenics/phpcs-calisthenics-rules` dependency ([#477](https://github.com/nunomaduro/phpinsights/pull/477))
+
+### Deprecated
+- Some Insights hare now deprecated or namespace changed. Find them [here (#477)][#477](https://github.com/nunomaduro/phpinsights/pull/477)
+
+## [v1.14.1]
+### Changed
+- Switch service to discover vulnerabilities ([#453](https://github.com/nunomaduro/phpinsights/pull/453))
+
+
+## [v1.14.0]
+### Added
+- `ddd` & `tinker` as forbidden method names Laravel ([#364](https://github.com/nunomaduro/phpinsights/pull/364))
+- Support to Laravel 7 ([#369](https://github.com/nunomaduro/phpinsights/pull/369))
+- `min-requirements` configurable through file ([#362](https://github.com/nunomaduro/phpinsights/pull/362))
+
+### Fixed
+- Hanging on invalid php code ([#358](https://github.com/nunomaduro/phpinsights/pull/358))
+- Aggregates diffs in the same error ([#377](https://github.com/nunomaduro/phpinsights/pull/377))
+
+### Changed
+- Removed Static closure advice on Laravel ([e9d2a62](https://github.com/nunomaduro/phpinsights/commit/e9d2a62bb97468f2886622f54be10de1bc3eeb24))
+
+## [v1.13.0]
+### Added
+- Sort issues by file, line, function and lastly message ([#348](https://github.com/nunomaduro/phpinsights/pull/348))
+- Support multiple formatters ([#357](https://github.com/nunomaduro/phpinsights/pull/357))
+- Support custom class formatters ([#357](https://github.com/nunomaduro/phpinsights/pull/357))
+- Added diff from fixer to JSON formatter ([#356](https://github.com/nunomaduro/phpinsights/pull/356))
+- Check PHP version from composer to determine native type hint ([#347](https://github.com/nunomaduro/phpinsights/pull/347))
+- Added GitHub Action formatter ([#344](https://github.com/nunomaduro/phpinsights/pull/344))
+
+### Fixed
+- Prevent failing on empty namespace ([#352](https://github.com/nunomaduro/phpinsights/pull/352))
+
+## [v1.12.0]
+### Added
+- Text coloring per section ([#339](https://github.com/nunomaduro/phpinsights/pull/339))
+- Support to slevomat coding standard 6 ([#342](https://github.com/nunomaduro/phpinsights/pull/342))
+
+## [v1.11.1]
+### Fixed
+- Exclusion in ForbiddenFinalClasses Insight ([#326](https://github.com/nunomaduro/phpinsights/pull/326))
+
+## [v1.11.0]
+### Added
+- Support to Symfony 5 ([#324](https://github.com/nunomaduro/phpinsights/pull/324))
+
+## [v1.10.3]
+### Fixed
+- Assert IDE is defined before resolving it ([#319](https://github.com/nunomaduro/phpinsights/pull/319))
+
+## [v1.10.2]
+### Fixed
+- Exclusion in ForbiddenTraits Insight ([#316](https://github.com/nunomaduro/phpinsights/pull/316))
+
+## [v1.10.1]
+### Changed
+- Reorganize place of some Insights ([#313](https://github.com/nunomaduro/phpinsights/pull/313))
+
+### Fixed
+- Duplicate empty comment Insight ([#311](https://github.com/nunomaduro/phpinsights/pull/311))
+- Remove VoidReturnFixer in laravel Preset ([#312](https://github.com/nunomaduro/phpinsights/pull/312))
+
+## [v1.10.0]
+### Added
+- Checkstyle formatter ([#271](https://github.com/nunomaduro/phpinsights/pull/271))
+- PHP CS Fixer Wrapper ([#219](https://github.com/nunomaduro/phpinsights/pull/219))
+- Responsive view in Console ([#273](https://github.com/nunomaduro/phpinsights/pull/273))
+- IDE Url handler ([#265](https://github.com/nunomaduro/phpinsights/pull/265))
+- Offline usage ([#292](https://github.com/nunomaduro/phpinsights/pull/292))
+- Directory exclusion in Insights config ([#293](https://github.com/nunomaduro/phpinsights/pull/293))
+- Favicon in website ([#281](https://github.com/nunomaduro/phpinsights/pull/281))
+
+### Changed
+- Drop easy coding standard dependency ([#252](https://github.com/nunomaduro/phpinsights/pull/252))
+- Use a configuration class ([#283](https://github.com/nunomaduro/phpinsights/pull/283))
+- Improve verbose progress bar ([#291](https://github.com/nunomaduro/phpinsights/pull/291))
+
+### Fixed
+- Silence Warnings ([#253](https://github.com/nunomaduro/phpinsights/pull/253))
+
 ## [v1.9.0]
 ### Added
 - Better support to Laravel Lumen ([#247](https://github.com/nunomaduro/phpinsights/pull/247))

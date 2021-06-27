@@ -10,14 +10,22 @@ use NunoMaduro\PhpInsights\Domain\Details;
 use NunoMaduro\PhpInsights\Domain\Exceptions\ComposerNotFound;
 use NunoMaduro\PhpInsights\Domain\Insights\Insight;
 
+/**
+ * @see \Tests\Domain\Insights\Composer\ComposerLockMustBeFreshTest
+ */
 final class ComposerLockMustBeFresh extends Insight implements HasDetails
 {
     public function hasIssue(): bool
     {
         try {
             $composer = ComposerLoader::getInstance($this->collector);
+            $locker = $composer->getLocker();
 
-            return ! $composer->getLocker()->isFresh();
+            if (! $locker->isLocked()) {
+                return true;
+            }
+
+            return ! $locker->isFresh();
         } catch (ComposerNotFound $exception) {
             return true;
         }
